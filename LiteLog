@@ -1,0 +1,114 @@
+<?php
+/**
+ * LiteLog - Lightweight logging utility for PHP
+ * 
+ * Copyright (C) 2025 Lars Grove Mortensen. All rights reserved.
+ * 
+ * LiteLog is a simple and efficient logging function for PHP applications. 
+ * It supports structured JSON logging, log rotation, and IP tracking, making 
+ * it easy to maintain and debug application logs.
+ * 
+ * LiteLog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * LiteLog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with LiteLog. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+
+
+/**
+ * Logs messages to a JSON-formatted file.
+ *
+ * This function logs both simple string messages and structured array messages.
+ * It ensures that the log directory exists, rotates the log file if it exceeds the specified size,
+ * and writes log entries in JSON format with a timestamp, category, client IP, and optional context.
+ *
+ * @param mixed  $message       The log message, either a string or an associative array.
+ * @param string $category      Log category (e.g., "auth", "error", "debug").
+ * @param string $log_file      Name of the log file.
+ * @param string $log_path      Path to the log directory.
+ * @param array  $context       Optional context array for additional details.
+ * @param string|null $client_ip Client IP address (defaults to detected IP).
+ * @param int    $max_file_size Maximum log file size before rotation (default: 10MB).
+ *
+ * @throws RuntimeException If log directory creation fails, log file rotation fails, or JSON encoding fails.
+ */
+function LiteLog(
+	$message,
+	string $category = 'debug',
+	string $log_file = LOGGER_FILE,
+	string $log_path = LOGGER_PATH,	
+	array $context = [],
+	?string $client_ip = null,
+	int $max_file_size = 10 * 1024 * 1024 // 10MB
+): void {
+	// Ensure directory exists and is writable
+	if (!is_dir($log_path) && !mkdir($log_path, 0755, true) && !is_dir($log_path)) {
+		throw new RuntimeException("LiteLog: Failed to create log directory at '$log_path'.");
+	}
+	if (!is_writable($log_path)) {
+		throw new RuntimeException("LiteLog: Log directory '$log_path' is not writable.");
+	}
+
+	// Full path to log file
+	$log_full_path = rtrim($log_path, '/') . '/' . $log_file;
+
+	// Convert array messages to JSON
+	try {
+		$message = is_array($message) ? json_encode($message, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) : $message;
+	} catch (JsonException $e) {
+		throw new RuntimeException('LiteLog: Failed to encode message as JSON - ' . $e->getMessage());
+	}
+
+	// Rotate log file if size exceeds limit
+	clearstatcache(true, $log_full_path);
+	if (@filesize($log_full_path) >= $max_file_size) {
+		$backup_path = sprintf('%s_%s.json', $log_full_path, str_replace('.', '_', number_format(microtime(true), 3, '.', '')));
+		if (!@rename($log_full_path, $backup_path)) {
+			throw new RuntimeException("LiteLog: Failed to rotate log file '$log_full_path' to '$backup_path'.");
+		}
+	}
+
+	// Create log entry
+	try {
+		$log_entry = json_encode([
+			'timestamp' => date("Y-m-d H:i:s"),
+			'category'     => $category,
+			'message'   => $message,
+			'context'   => $context,
+			'ip'        => $client_ip ?? $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
+		], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+	} catch (JsonException $e) {
+		throw new RuntimeException('LiteLog: Failed to encode log entry as JSON - ' . $e->getMessage());
+	}
+
+
+	/*
+	// Write to log file with file locking
+	$file = fopen($log_full_path, 'a');
+	if (!$file) {
+		throw new RuntimeException('LiteLog: Failed to open log file for writing.');
+	}
+
+	if (flock($file, LOCK_EX)) {
+		fwrite($file, $log_entry . PHP_EOL);
+		flock($file, LOCK_UN);
+		fclose($file);
+	} else {
+		fclose($file);
+		throw new RuntimeException('LiteLog: Failed to acquire file lock for writing.');
+	}
+	*/
+	
+	// Write to log file
+	error_log($log_entry . PHP_EOL, 3, $log_full_path);
+	
+}

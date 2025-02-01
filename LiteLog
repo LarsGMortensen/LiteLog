@@ -69,11 +69,21 @@ function LiteLog(
 	}
 
 	// Rotate log file if size exceeds limit
-	clearstatcache(true, $log_full_path);
-	if (@filesize($log_full_path) >= $max_file_size) {
-		$backup_path = sprintf('%s_%s.json', $log_full_path, str_replace('.', '_', number_format(microtime(true), 3, '.', '')));
-		if (!@rename($log_full_path, $backup_path)) {
-			throw new RuntimeException("LiteLog: Failed to rotate log file '$log_full_path' to '$backup_path'.");
+	clearstatcache(true, $log_full_path);	
+	if (file_exists($log_full_path)) {
+		$size = filesize($log_full_path);
+		if ($size !== false && $size >= $max_file_size) {			
+			$backup_path = sprintf('%s_%s.json', $log_full_path, str_replace('.', '_', number_format(microtime(true), 3, '.', '')));
+			
+			if (!rename($log_full_path, $backup_path)) {
+				$error = error_get_last();
+				throw new RuntimeException(sprintf(
+					"LiteLog: Failed to rotate log file '%s' to '%s'. Error: %s",
+					$log_full_path,
+					$backup_path,
+					$error['message'] ?? 'Unknown error'
+				));
+			}
 		}
 	}
 

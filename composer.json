@@ -1,0 +1,20 @@
+{
+  "name": "larsgmortensen/litelog",
+  "description": "Ultra-fast, lightweight JSON logger for PHP (7.4+), supporting atomic writes, safe log rotation, and strict error handling.",
+  "type": "library",
+  "license": "GPL-3.0-or-later",
+  "autoload": {
+    "psr-4": {
+      "LiteLog\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Lars Grove Mortensen",
+      "homepage": "https://github.com/LarsGMortensen"
+    }
+  ],
+  "require": {
+    "php": ">=7.4"
+  }
+}
